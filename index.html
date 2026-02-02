@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soil Saturation - Santana do Mato</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; color: #1a508b; font-size: 1.5rem; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: #eef2f7; padding: 15px; border-radius: 8px; flex: 1; text-align: center; }
+        .stat-value { font-size: 1.2rem; font-weight: bold; color: #2c3e50; }
+        .stat-label { font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Soil Saturation Tracker: Santana do Mato</h1>
+    
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-label">Current Saturation</div>
+            <div id="current-sat" class="stat-value">-- %</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Rain (14d)</div>
+            <div id="total-rain" class="stat-value">-- mm</div>
+        </div>
+    </div>
+
+    <canvas id="weatherChart"></canvas>
+    
+    <p style="font-size: 0.8rem; color: #999; margin-top: 20px;">
+        *Simulation assumes a 120mm soil water capacity. 
+        Data source: Open-Meteo (GPS: 38.839, -8.451).
+    </p>
+</div>
+
+<script>
+async function updateDashboard() {
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=7&forecast_days=7&timezone=Europe%2FLisbon";
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const daily = data.daily;
+
+        // Simulation Parameters
+        const MAX_CAPACITY = 120; // mm
+        let currentStorage = 40;   // Estimated starting point 7 days ago
+        let saturationHistory = [];
+        let totalRain = 0;
+
+        // Calculate Saturation over the 14 day period
+        for (let i = 0; i < daily.time.length; i++) {
+            const rain = daily.precipitation_sum[i];
+            const et0 = daily.et0_fao_evapotranspiration[i];
+            
+            currentStorage = currentStorage + rain - et0;
+            
+            // Constraints
+            if (currentStorage > MAX_CAPACITY) currentStorage = MAX_CAPACITY;
+            if (currentStorage < 0) currentStorage = 0;
+            
+            const satPct = (currentStorage / MAX_CAPACITY) * 100;
+            saturationHistory.push(satPct.toFixed(1));
+            totalRain += rain;
+        }
+
+        // Update UI Cards
+        document.getElementById('current-sat').innerText = saturationHistory[7] + "%";
+        document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
+
+        // Create Chart
+        const ctx = document.getElementById('weatherChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: daily.time,
+                datasets: [
+                    {
+                        label: 'Soil Saturation %',
+                        data: saturationHistory,
+                        type: 'line',
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                        fill: true,
+                        yAxisID: 'y1',
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Daily Rain (mm)',
+                        data: daily.precipitation_sum,
+                        backgroundColor: '#3498db',
+                        yAxisID: 'y',
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Rain (mm)' }, position: 'left' },
+                    y1: { beginAtZero: true, max: 100, title: { display: true, text: 'Saturation (%)' }, position: 'right', grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("Error fetching data:", error);
+    }
+}
+
+updateDashboard();
+</script>
+</body>
+</html>
