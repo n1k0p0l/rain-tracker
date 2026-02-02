@@ -78,9 +78,17 @@ async function updateDashboard() {
         document.getElementById('current-sat').innerText = saturationHistory[14] + "%";
         document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
         
-        // Calculate average sunlight hours (convert from seconds to hours)
-        const sunlightHours = daily.sunshine_duration.map(s => parseFloat((s / 3600).toFixed(1)));
-        const avgSunlight = (sunlightHours.reduce((a, b) => a + b, 0) / sunlightHours.length).toFixed(1);
+        // Calculate sunlight hours (convert from seconds to hours)
+        // Treat null/zero values as non-existent (null creates gaps in Chart.js)
+        const sunlightHours = daily.sunshine_duration.map(s => {
+            if (s == null || s <= 0) return null;
+            return parseFloat((s / 3600).toFixed(1));
+        });
+        // Calculate average only from valid (non-null) values
+        const validSunlightHours = sunlightHours.filter(h => h !== null);
+        const avgSunlight = validSunlightHours.length > 0 
+            ? (validSunlightHours.reduce((a, b) => a + b, 0) / validSunlightHours.length).toFixed(1) 
+            : "--";
         document.getElementById('avg-sunlight').innerText = avgSunlight + " h";
 
         // Create Combined Chart
@@ -119,6 +127,7 @@ async function updateDashboard() {
                         fill: false,
                         yAxisID: 'y1',
                         tension: 0.3,
+                        spanGaps: false,
                         order: 1
                     }
                 ]
