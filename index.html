@@ -37,9 +37,6 @@
 
     <canvas id="weatherChart"></canvas>
     
-    <h2 style="margin-top: 30px; color: #1a508b; font-size: 1.2rem;">☀️ Sunlight Hours (Solar Charging)</h2>
-    <canvas id="sunlightChart"></canvas>
-    
     <p style="font-size: 0.8rem; color: #999; margin-top: 20px;">
         *Simulation assumes a 120mm soil water capacity. 
         Data source: Open-Meteo (GPS: 38.839, -8.451). 28-day view (14 past + 14 future).
@@ -86,60 +83,58 @@ async function updateDashboard() {
         const avgSunlight = (sunlightHours.reduce((a, b) => a + b, 0) / sunlightHours.length).toFixed(1);
         document.getElementById('avg-sunlight').innerText = avgSunlight + " h";
 
-        // Create Chart
+        // Create Combined Chart
         const ctx = document.getElementById('weatherChart').getContext('2d');
+        
+        // Convert evapotranspiration to negative values
+        const negativeEt0 = daily.et0_fao_evapotranspiration.map(v => -v);
+        
         new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: daily.time,
                 datasets: [
                     {
-                        label: 'Soil Saturation %',
-                        data: saturationHistory,
-                        type: 'line',
-                        borderColor: '#2ecc71',
-                        backgroundColor: 'rgba(46, 204, 113, 0.2)',
-                        fill: true,
-                        yAxisID: 'y1',
-                        tension: 0.3
-                    },
-                    {
                         label: 'Daily Rain (mm)',
                         data: daily.precipitation_sum,
                         backgroundColor: '#3498db',
                         yAxisID: 'y',
-                        borderRadius: 4
-                    }
-                ]
-            },
-            options: {
-                scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Rain (mm)' }, position: 'left' },
-                    y1: { beginAtZero: true, max: 100, title: { display: true, text: 'Saturation (%)' }, position: 'right', grid: { drawOnChartArea: false } }
-                }
-            }
-        });
-
-        // Create Sunlight Chart
-        const ctx2 = document.getElementById('sunlightChart').getContext('2d');
-        new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: daily.time,
-                datasets: [
+                        borderRadius: 4,
+                        order: 2
+                    },
+                    {
+                        label: 'Evapotranspiration (mm)',
+                        data: negativeEt0,
+                        backgroundColor: '#e74c3c',
+                        yAxisID: 'y',
+                        borderRadius: 4,
+                        order: 3
+                    },
                     {
                         label: 'Sunlight Hours',
                         data: sunlightHours,
-                        backgroundColor: '#f1c40f',
+                        type: 'line',
                         borderColor: '#f39c12',
-                        borderWidth: 1,
-                        borderRadius: 4
+                        backgroundColor: 'rgba(243, 156, 18, 0.2)',
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        order: 1
                     }
                 ]
             },
             options: {
                 scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Hours' }, position: 'left' }
+                    y: { 
+                        title: { display: true, text: 'Rain / ET (mm)' }, 
+                        position: 'left'
+                    },
+                    y1: { 
+                        beginAtZero: true, 
+                        title: { display: true, text: 'Sunlight (hours)' }, 
+                        position: 'right', 
+                        grid: { drawOnChartArea: false } 
+                    }
                 }
             }
         });
