@@ -79,7 +79,8 @@ async function updateDashboard() {
         document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
         
         // Calculate average sunlight hours (convert from seconds to hours)
-        const sunlightHours = daily.sunshine_duration.map(s => parseFloat((s / 3600).toFixed(1)));
+        // Handle null/undefined values and ensure no negative values
+        const sunlightHours = daily.sunshine_duration.map(s => parseFloat((Math.max(0, s ?? 0) / 3600).toFixed(1)));
         const avgSunlight = (sunlightHours.reduce((a, b) => a + b, 0) / sunlightHours.length).toFixed(1);
         document.getElementById('avg-sunlight').innerText = avgSunlight + " h";
 
