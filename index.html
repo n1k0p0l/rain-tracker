@@ -30,8 +30,8 @@
             <div id="total-rain" class="stat-value">-- mm</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Avg Daily Sunlight</div>
-            <div id="avg-sunlight" class="stat-value">-- h</div>
+            <div class="stat-label">Temp Range (28d)</div>
+            <div id="temp-range" class="stat-value">--°C / --°C</div>
         </div>
     </div>
 
@@ -45,7 +45,7 @@
 
 <script>
 async function updateDashboard() {
-    const url = "https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration,sunshine_duration&past_days=14&forecast_days=14&timezone=Europe%2FLisbon";
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min&past_days=14&forecast_days=14&timezone=Europe%2FLisbon";
     
     try {
         const response = await fetch(url);
@@ -78,24 +78,38 @@ async function updateDashboard() {
         document.getElementById('current-sat').innerText = saturationHistory[14] + "%";
         document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
         
-        // Calculate sunlight hours (convert from seconds to hours)
-        // Treat null/zero values as non-existent (null creates gaps in Chart.js)
-        const sunlightHours = daily.sunshine_duration.map(s => {
-            if (s == null || s <= 0) return null;
-            return parseFloat((s / 3600).toFixed(1));
-        });
-        // Calculate average only from valid (non-null) values
-        const validSunlightHours = sunlightHours.filter(h => h !== null);
-        const avgSunlight = validSunlightHours.length > 0 
-            ? (validSunlightHours.reduce((a, b) => a + b, 0) / validSunlightHours.length).toFixed(1) 
-            : "--";
-        document.getElementById('avg-sunlight').innerText = avgSunlight + " h";
+        // Get temperature data
+        const tempMax = daily.temperature_2m_max;
+        const tempMin = daily.temperature_2m_min;
+        
+        // Calculate min and max temperatures over the period
+        const validMaxTemps = tempMax.filter(t => t !== null);
+        const validMinTemps = tempMin.filter(t => t !== null);
+        const overallMax = validMaxTemps.length > 0 ? Math.max(...validMaxTemps).toFixed(1) : "--";
+        const overallMin = validMinTemps.length > 0 ? Math.min(...validMinTemps).toFixed(1) : "--";
+        document.getElementById('temp-range').innerText = overallMin + "°C / " + overallMax + "°C";
+
+        // Prepare stacked bar data: rainfall minus evapotranspiration (net water) at bottom, evapotranspiration on top
+        // Total bar height = total rainfall
+        const netWater = [];
+        const et0ForStack = [];
+        for (let i = 0; i < daily.time.length; i++) {
+            const rain = daily.precipitation_sum[i] || 0;
+            const et0 = daily.et0_fao_evapotranspiration[i] || 0;
+            // Net water (rainfall - evapotranspiration), can be negative
+            const net = rain - et0;
+            if (net >= 0) {
+                netWater.push(net);
+                et0ForStack.push(et0);
+            } else {
+                // When ET exceeds rain, show ET taking up full rain amount and net as negative
+                netWater.push(net);
+                et0ForStack.push(rain);
+            }
+        }
 
         // Create Combined Chart
         const ctx = document.getElementById('weatherChart').getContext('2d');
-        
-        // Convert evapotranspiration to negative values
-        const negativeEt0 = daily.et0_fao_evapotranspiration.map(v => -v);
         
         new Chart(ctx, {
             type: 'bar',
@@ -103,44 +117,61 @@ async function updateDashboard() {
                 labels: daily.time,
                 datasets: [
                     {
-                        label: 'Daily Rain (mm)',
-                        data: daily.precipitation_sum,
+                        label: 'Net Water (Rain - ET)',
+                        data: netWater,
                         backgroundColor: '#3498db',
                         yAxisID: 'y',
                         borderRadius: 4,
-                        order: 2
-                    },
-                    {
-                        label: 'Evapotranspiration (mm)',
-                        data: negativeEt0,
-                        backgroundColor: '#e74c3c',
-                        yAxisID: 'y',
-                        borderRadius: 4,
+                        stack: 'rainfall',
                         order: 3
                     },
                     {
-                        label: 'Sunlight Hours',
-                        data: sunlightHours,
+                        label: 'Evapotranspiration (mm)',
+                        data: et0ForStack,
+                        backgroundColor: '#e74c3c',
+                        yAxisID: 'y',
+                        borderRadius: 4,
+                        stack: 'rainfall',
+                        order: 2
+                    },
+                    {
+                        label: 'Max Temp (°C)',
+                        data: tempMax,
                         type: 'line',
-                        borderColor: '#f39c12',
-                        backgroundColor: 'rgba(243, 156, 18, 0.2)',
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.2)',
                         fill: false,
                         yAxisID: 'y1',
                         tension: 0.3,
-                        spanGaps: false,
+                        spanGaps: true,
                         order: 1
+                    },
+                    {
+                        label: 'Min Temp (°C)',
+                        data: tempMin,
+                        type: 'line',
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        spanGaps: true,
+                        order: 0
                     }
                 ]
             },
             options: {
                 scales: {
+                    x: {
+                        stacked: true
+                    },
                     y: { 
+                        stacked: true,
                         title: { display: true, text: 'Rain / ET (mm)' }, 
                         position: 'left'
                     },
                     y1: { 
-                        beginAtZero: true, 
-                        title: { display: true, text: 'Sunlight (hours)' }, 
+                        title: { display: true, text: 'Temperature (°C)' }, 
                         position: 'right', 
                         grid: { drawOnChartArea: false } 
                     }
