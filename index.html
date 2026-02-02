@@ -26,22 +26,29 @@
             <div id="current-sat" class="stat-value">-- %</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Total Rain (14d)</div>
+            <div class="stat-label">Total Rain (28d)</div>
             <div id="total-rain" class="stat-value">-- mm</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Daily Sunlight</div>
+            <div id="avg-sunlight" class="stat-value">-- h</div>
         </div>
     </div>
 
     <canvas id="weatherChart"></canvas>
     
+    <h2 style="margin-top: 30px; color: #1a508b; font-size: 1.2rem;">☀️ Sunlight Hours (Solar Charging)</h2>
+    <canvas id="sunlightChart"></canvas>
+    
     <p style="font-size: 0.8rem; color: #999; margin-top: 20px;">
         *Simulation assumes a 120mm soil water capacity. 
-        Data source: Open-Meteo (GPS: 38.839, -8.451).
+        Data source: Open-Meteo (GPS: 38.839, -8.451). 28-day view (14 past + 14 future).
     </p>
 </div>
 
 <script>
 async function updateDashboard() {
-    const url = "https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration&past_days=7&forecast_days=7&timezone=Europe%2FLisbon";
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration,sunshine_duration&past_days=14&forecast_days=14&timezone=Europe%2FLisbon";
     
     try {
         const response = await fetch(url);
@@ -50,11 +57,11 @@ async function updateDashboard() {
 
         // Simulation Parameters
         const MAX_CAPACITY = 120; // mm
-        let currentStorage = 40;   // Estimated starting point 7 days ago
+        let currentStorage = 40;   // Estimated starting point 14 days ago
         let saturationHistory = [];
         let totalRain = 0;
 
-        // Calculate Saturation over the 14 day period
+        // Calculate Saturation over the 28 day period
         for (let i = 0; i < daily.time.length; i++) {
             const rain = daily.precipitation_sum[i];
             const et0 = daily.et0_fao_evapotranspiration[i];
@@ -71,8 +78,13 @@ async function updateDashboard() {
         }
 
         // Update UI Cards
-        document.getElementById('current-sat').innerText = saturationHistory[7] + "%";
+        document.getElementById('current-sat').innerText = saturationHistory[14] + "%";
         document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
+        
+        // Calculate average sunlight hours (convert from seconds to hours)
+        const sunlightHours = daily.sunshine_duration.map(s => parseFloat((s / 3600).toFixed(1)));
+        const avgSunlight = (sunlightHours.reduce((a, b) => a + b, 0) / sunlightHours.length).toFixed(1);
+        document.getElementById('avg-sunlight').innerText = avgSunlight + " h";
 
         // Create Chart
         const ctx = document.getElementById('weatherChart').getContext('2d');
@@ -104,6 +116,30 @@ async function updateDashboard() {
                 scales: {
                     y: { beginAtZero: true, title: { display: true, text: 'Rain (mm)' }, position: 'left' },
                     y1: { beginAtZero: true, max: 100, title: { display: true, text: 'Saturation (%)' }, position: 'right', grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+
+        // Create Sunlight Chart
+        const ctx2 = document.getElementById('sunlightChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: daily.time,
+                datasets: [
+                    {
+                        label: 'Sunlight Hours',
+                        data: sunlightHours,
+                        backgroundColor: '#f1c40f',
+                        borderColor: '#f39c12',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Hours' }, position: 'left' }
                 }
             }
         });
