@@ -159,6 +159,18 @@ async function updateDashboard() {
                 labels: daily.time,
                 datasets: [
                     {
+                        label: 'Soil Saturation (%)',
+                        data: saturationHistory,
+                        type: 'line',
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.3)',
+                        fill: true,
+                        yAxisID: 'y2',
+                        tension: 0.3,
+                        spanGaps: true,
+                        order: 0
+                    },
+                    {
                         label: 'Net Water (Rain - ET)',
                         data: netWater,
                         backgroundColor: '#3498db',
@@ -184,7 +196,7 @@ async function updateDashboard() {
                         yAxisID: 'y1',
                         tension: 0.3,
                         spanGaps: true,
-                        order: 1
+                        order: 2
                     },
                     {
                         label: 'Min Temp (°C)',
@@ -196,7 +208,7 @@ async function updateDashboard() {
                         yAxisID: 'y1',
                         tension: 0.3,
                         spanGaps: true,
-                        order: 0
+                        order: 1
                     }
                 ]
             },
@@ -213,7 +225,14 @@ async function updateDashboard() {
                     y1: { 
                         title: { display: true, text: 'Temperature (°C)' }, 
                         position: 'right', 
-                        grid: { drawOnChartArea: false } 
+                        grid: { drawOnChartArea: false }
+                    },
+                    y2: {
+                        title: { display: true, text: 'Saturation (%)' },
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        grid: { drawOnChartArea: false }
                     }
                 }
             }
