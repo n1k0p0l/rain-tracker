@@ -59,7 +59,8 @@
     
     <p style="font-size: 0.8rem; color: #999; margin-top: 20px;">
         *Simulation assumes a 120mm soil water capacity. 
-        Data source: Open-Meteo (GPS: 38.839, -8.451). Adjustable date range.
+        Data source: Open-Meteo (GPS: 38.839, -8.451). Adjustable date range.<br>
+        Version: 1.1.0 | Last updated: 2026-02-14
     </p>
 </div>
 
@@ -75,7 +76,9 @@ async function updateDashboard() {
     document.getElementById('total-days-label').innerText = totalDays;
     document.getElementById('temp-days-label').innerText = totalDays;
     
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min&past_days=${pastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
+    // Use maximum past days (92) to calculate a better starting saturation
+    const maxPastDays = 92;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=38.839361&longitude=-8.451498&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
     
     try {
         const response = await fetch(url);
@@ -90,11 +93,14 @@ async function updateDashboard() {
 
         // Simulation Parameters
         const MAX_CAPACITY = 120; // mm
-        let currentStorage = 40;   // Estimated starting point
+        let currentStorage = 40;   // Estimated starting point (assumption for 92 days prior)
         let saturationHistory = [];
         let totalRain = 0;
 
-        // Calculate Saturation over the period
+        // Calculate Saturation over the full period (including pre-display days for accurate starting saturation)
+        // The number of pre-display days used to calculate initial saturation
+        const preDisplayDays = Math.max(0, maxPastDays - pastDays);
+        
         for (let i = 0; i < daily.time.length; i++) {
             const rain = daily.precipitation_sum[i];
             const et0 = daily.et0_fao_evapotranspiration[i];
@@ -107,21 +113,29 @@ async function updateDashboard() {
             
             const satPct = (currentStorage / MAX_CAPACITY) * 100;
             saturationHistory.push(satPct.toFixed(1));
-            totalRain += rain;
+            
+            // Only count rain for the display period
+            if (i >= preDisplayDays) {
+                totalRain += rain;
+            }
         }
+        
+        // Extract only the display period data (last pastDays + futureDays entries)
+        const displayDates = daily.time.slice(preDisplayDays);
+        const displaySaturation = saturationHistory.slice(preDisplayDays);
+        const displayTempMax = daily.temperature_2m_max.slice(preDisplayDays);
+        const displayTempMin = daily.temperature_2m_min.slice(preDisplayDays);
+        const displayPrecip = daily.precipitation_sum.slice(preDisplayDays);
+        const displayET0 = daily.et0_fao_evapotranspiration.slice(preDisplayDays);
 
         // Update UI Cards - use pastDays as the index for "current" saturation (today)
-        const currentIndex = Math.min(pastDays, saturationHistory.length - 1);
-        document.getElementById('current-sat').innerText = saturationHistory[currentIndex] + "%";
+        const currentIndex = Math.min(pastDays, displaySaturation.length - 1);
+        document.getElementById('current-sat').innerText = displaySaturation[currentIndex] + "%";
         document.getElementById('total-rain').innerText = totalRain.toFixed(1) + " mm";
         
-        // Get temperature data
-        const tempMax = daily.temperature_2m_max;
-        const tempMin = daily.temperature_2m_min;
-        
-        // Calculate min and max temperatures over the period
-        const validMaxTemps = tempMax.filter(t => t !== null);
-        const validMinTemps = tempMin.filter(t => t !== null);
+        // Calculate min and max temperatures over the display period
+        const validMaxTemps = displayTempMax.filter(t => t !== null);
+        const validMinTemps = displayTempMin.filter(t => t !== null);
         const overallMax = validMaxTemps.length > 0 ? Math.max(...validMaxTemps).toFixed(1) : "--";
         const overallMin = validMinTemps.length > 0 ? Math.min(...validMinTemps).toFixed(1) : "--";
         document.getElementById('temp-range').innerText = overallMin + "°C / " + overallMax + "°C";
@@ -130,9 +144,9 @@ async function updateDashboard() {
         // Total bar height = total rainfall
         const netWater = [];
         const et0ForStack = [];
-        for (let i = 0; i < daily.time.length; i++) {
-            const rain = daily.precipitation_sum[i] || 0;
-            const et0 = daily.et0_fao_evapotranspiration[i] || 0;
+        for (let i = 0; i < displayDates.length; i++) {
+            const rain = displayPrecip[i] || 0;
+            const et0 = displayET0[i] || 0;
             // Net water (rainfall - evapotranspiration), can be negative
             const net = rain - et0;
             if (net >= 0) {
@@ -156,11 +170,11 @@ async function updateDashboard() {
         weatherChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: daily.time,
+                labels: displayDates,
                 datasets: [
                     {
                         label: 'Soil Saturation (%)',
-                        data: saturationHistory,
+                        data: displaySaturation,
                         type: 'line',
                         borderColor: '#27ae60',
                         backgroundColor: 'rgba(39, 174, 96, 0.3)',
@@ -188,7 +202,7 @@ async function updateDashboard() {
                     },
                     {
                         label: 'Max Temp (°C)',
-                        data: tempMax,
+                        data: displayTempMax,
                         type: 'line',
                         borderColor: '#e74c3c',
                         backgroundColor: 'rgba(231, 76, 60, 0.2)',
@@ -200,7 +214,7 @@ async function updateDashboard() {
                     },
                     {
                         label: 'Min Temp (°C)',
-                        data: tempMin,
+                        data: displayTempMin,
                         type: 'line',
                         borderColor: '#3498db',
                         backgroundColor: 'rgba(52, 152, 219, 0.2)',
