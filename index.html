@@ -30,10 +30,11 @@
     <div class="controls">
         <div class="control-group">
             <label for="locationSelect">Location:</label>
-            <select id="locationSelect" onchange="updateDashboard()">
-                <option value="armazem25" selected>Armazém 25</option>
+            <select id="locationSelect" onchange="onLocationChange()">
+                <option value="armazem25">Armazém 25</option>
                 <option value="montedamina">Monte da Mina</option>
                 <option value="therocks">The Rocks</option>
+                <option value="cercal">Cercal</option>
             </select>
         </div>
         <div class="control-group">
@@ -69,7 +70,7 @@
     <p style="font-size: 0.8rem; color: #999; margin-top: 20px;">
         *Simulation assumes a 120mm soil water capacity. 
         Data source: Open-Meteo (GPS: <span id="coords-display">38.839361, -8.451498</span>). Adjustable date range.<br>
-        Version: 1.2.0 | Last updated: 2026-02-14
+        Version: 1.3.0 | Last updated: 2026-02-14
     </p>
 </div>
 
@@ -91,8 +92,30 @@ const locations = {
         name: 'The Rocks',
         latitude: 39.495524,
         longitude: -8.754372
+    },
+    cercal: {
+        name: 'Cercal',
+        latitude: 37.8347,
+        longitude: -8.5613
     }
 };
+
+// Cookie helper functions
+function setCookie(name, value, days) {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/; SameSite=Lax';
+}
+
+function getCookie(name) {
+    const value = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+    return value ? decodeURIComponent(value.split('=')[1]) : null;
+}
+
+function onLocationChange() {
+    const locationKey = document.getElementById('locationSelect').value;
+    setCookie('selectedLocation', locationKey, 365);
+    updateDashboard();
+}
 
 async function updateDashboard() {
     const locationKey = document.getElementById('locationSelect').value;
@@ -291,7 +314,21 @@ async function updateDashboard() {
     }
 }
 
-updateDashboard();
+// Initialize with saved location from cookie or default to armazem25
+function initializePage() {
+    const savedLocation = getCookie('selectedLocation');
+    const locationSelect = document.getElementById('locationSelect');
+    
+    if (savedLocation && locations[savedLocation]) {
+        locationSelect.value = savedLocation;
+    } else {
+        locationSelect.value = 'armazem25';
+    }
+    
+    updateDashboard();
+}
+
+initializePage();
 </script>
 </body>
 </html>
