@@ -24,8 +24,8 @@ jobs:
       - name: Extract current version and bump
         id: version
         run: |
-          # Extract current version from index.html line 77
-          CURRENT_LINE=$(sed -n '77p' index.html)
+          # Extract current version from index.html using pattern matching
+          CURRENT_LINE=$(grep -E 'Version: [0-9]+\.[0-9]+\.[0-9]+ \| Last updated:' index.html)
           echo "Current line: $CURRENT_LINE"
           
           # Extract version using regex
@@ -76,11 +76,11 @@ jobs:
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
           CURRENT_DATE="${{ steps.version.outputs.current_date }}"
           
-          # Update line 77 with new version and date
-          sed -i "77s#Version: [0-9]\+\.[0-9]\+\.[0-9]\+ | Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}#Version: $NEW_VERSION | Last updated: $CURRENT_DATE#" index.html
+          # Update version and date using pattern-based replacement
+          sed -i "s#Version: [0-9]\+\.[0-9]\+\.[0-9]\+ | Last updated: [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}#Version: $NEW_VERSION | Last updated: $CURRENT_DATE#" index.html
           
           echo "Updated index.html:"
-          sed -n '77p' index.html
+          grep -E 'Version: [0-9]+\.[0-9]+\.[0-9]+ \| Last updated:' index.html
           
       - name: Commit and push changes
         run: |
@@ -89,4 +89,8 @@ jobs:
           
           git add index.html
           git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} after PR #${{ github.event.pull_request.number }}"
+          
+          # Push to main branch
+          # Note: This requires branch protection rules to allow the GitHub Actions bot to push
+          # or bypass branch protection. Configure this in repository settings if needed.
           git push origin main
