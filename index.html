@@ -333,6 +333,34 @@ async function updateDashboard() {
         // Create Combined Chart
         const ctx = document.getElementById('weatherChart').getContext('2d');
         
+        // Plugin to highlight today's column with a bolder rectangle
+        const todayHighlightPlugin = {
+            id: 'todayHighlight',
+            beforeDraw(chart) {
+                const todayIndex = chart.config.options?.plugins?.todayHighlight?.todayIndex;
+                if (todayIndex == null || todayIndex < 0 || todayIndex >= chart.data.labels.length) return;
+
+                const xScale = chart.scales.x;
+                const yScale = chart.scales.y;
+                const drawCtx = chart.ctx;
+
+                // Get the pixel position and width for today's bar area
+                const x = xScale.getPixelForValue(todayIndex);
+                const barWidth = xScale.width / chart.data.labels.length;
+                const left = x - barWidth / 2;
+
+                drawCtx.save();
+                // Draw a subtle highlighted background rectangle for today
+                drawCtx.fillStyle = 'rgba(26, 80, 139, 0.10)';
+                drawCtx.fillRect(left, yScale.top, barWidth, yScale.bottom - yScale.top);
+                // Draw bolder left and right borders for today's column
+                drawCtx.strokeStyle = 'rgba(26, 80, 139, 0.5)';
+                drawCtx.lineWidth = 2;
+                drawCtx.strokeRect(left, yScale.top, barWidth, yScale.bottom - yScale.top);
+                drawCtx.restore();
+            }
+        };
+
         weatherChart = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -392,7 +420,13 @@ async function updateDashboard() {
                     }
                 ]
             },
+            plugins: [todayHighlightPlugin],
             options: {
+                plugins: {
+                    todayHighlight: {
+                        todayIndex: currentIndex
+                    }
+                },
                 scales: {
                     x: {
                         stacked: true
