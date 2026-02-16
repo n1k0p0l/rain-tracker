@@ -332,21 +332,40 @@ async function updateDashboard() {
 
         // Create Combined Chart
         const ctx = document.getElementById('weatherChart').getContext('2d');
+
+        // Compute weekend indices (Saturday=6, Sunday=0) for highlighting
+        const weekendIndices = displayDates.reduce((acc, date, i) => {
+            const day = new Date(date + 'T00:00:00').getDay();
+            if (day === 0 || day === 6) acc.push(i);
+            return acc;
+        }, []);
         
-        // Plugin to highlight today's column with a bolder rectangle
+        // Plugin to highlight today's column and weekend columns
         const todayHighlightPlugin = {
             id: 'todayHighlight',
             beforeDraw(chart) {
-                const todayIndex = chart.config.options?.plugins?.todayHighlight?.todayIndex;
-                if (todayIndex == null || todayIndex < 0 || todayIndex >= chart.data.labels.length) return;
-
                 const xScale = chart.scales.x;
                 const yScale = chart.scales.y;
                 const drawCtx = chart.ctx;
-
-                // Get the pixel position and width for today's bar area
-                const x = xScale.getPixelForValue(todayIndex);
                 const barWidth = xScale.width / chart.data.labels.length;
+
+                // Highlight weekend columns
+                const weekendIndices = chart.config.options?.plugins?.todayHighlight?.weekendIndices || [];
+                for (const wi of weekendIndices) {
+                    if (wi < 0 || wi >= chart.data.labels.length) continue;
+                    const wx = xScale.getPixelForValue(wi);
+                    const wLeft = wx - barWidth / 2;
+                    drawCtx.save();
+                    drawCtx.fillStyle = 'rgba(150, 150, 150, 0.10)';
+                    drawCtx.fillRect(wLeft, yScale.top, barWidth, yScale.bottom - yScale.top);
+                    drawCtx.restore();
+                }
+
+                // Highlight today's column
+                const todayIndex = chart.config.options?.plugins?.todayHighlight?.todayIndex;
+                if (todayIndex == null || todayIndex < 0 || todayIndex >= chart.data.labels.length) return;
+
+                const x = xScale.getPixelForValue(todayIndex);
                 const left = x - barWidth / 2;
 
                 drawCtx.save();
@@ -424,7 +443,8 @@ async function updateDashboard() {
             options: {
                 plugins: {
                     todayHighlight: {
-                        todayIndex: currentIndex
+                        todayIndex: currentIndex,
+                        weekendIndices: weekendIndices
                     }
                 },
                 scales: {
