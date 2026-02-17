@@ -266,6 +266,32 @@ async function updateDashboard() {
         // Calculate Saturation over the full period (including pre-display days for accurate starting saturation)
         // The number of pre-display days used to calculate initial saturation
         const preDisplayDays = Math.max(0, maxPastDays - pastDays);
+
+        // Fetch last year's temperature data for comparison
+        const displayDatesAll = daily.time.slice(preDisplayDays);
+        function shiftDateOneYearBack(dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            d.setFullYear(d.getFullYear() - 1);
+            return d.toISOString().slice(0, 10);
+        }
+        const lastYearStartDate = shiftDateOneYearBack(displayDatesAll[0]);
+        const lastYearEndDate = shiftDateOneYearBack(displayDatesAll[displayDatesAll.length - 1]);
+        const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${location.latitude}&longitude=${location.longitude}&daily=temperature_2m_max,temperature_2m_min&start_date=${lastYearStartDate}&end_date=${lastYearEndDate}&timezone=Europe%2FLisbon`;
+        
+        let lastYearTempMax = [];
+        let lastYearTempMin = [];
+        try {
+            const archiveResponse = await fetch(archiveUrl);
+            if (archiveResponse.ok) {
+                const archiveData = await archiveResponse.json();
+                if (archiveData.daily) {
+                    lastYearTempMax = archiveData.daily.temperature_2m_max || [];
+                    lastYearTempMin = archiveData.daily.temperature_2m_min || [];
+                }
+            }
+        } catch (archiveError) {
+            console.warn('Could not fetch last year temperature data:', archiveError.message);
+        }
         
         for (let i = 0; i < daily.time.length; i++) {
             const rain = daily.precipitation_sum[i];
@@ -436,6 +462,34 @@ async function updateDashboard() {
                         tension: 0.3,
                         spanGaps: true,
                         order: 1
+                    },
+                    {
+                        label: 'Max Temp Last Year (°C)',
+                        data: lastYearTempMax,
+                        type: 'line',
+                        borderColor: 'rgba(231, 76, 60, 0.35)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        spanGaps: true,
+                        order: 4
+                    },
+                    {
+                        label: 'Min Temp Last Year (°C)',
+                        data: lastYearTempMin,
+                        type: 'line',
+                        borderColor: 'rgba(52, 152, 219, 0.35)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        spanGaps: true,
+                        order: 3
                     }
                 ]
             },
