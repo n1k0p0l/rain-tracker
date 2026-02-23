@@ -50,6 +50,14 @@
             <input type="number" id="futureDays" value="14" min="1" max="16">
         </div>
         <div class="control-group">
+            <label for="numPanels">Panels:</label>
+            <input type="number" id="numPanels" value="2" min="1" max="100">
+        </div>
+        <div class="control-group">
+            <label for="panelWatts">W/Panel:</label>
+            <input type="number" id="panelWatts" value="450" min="1" max="1000">
+        </div>
+        <div class="control-group">
             <button onclick="updateDashboard()">Update</button>
         </div>
     </div>
@@ -66,6 +74,10 @@
         <div class="stat-card">
             <div class="stat-label">Temp Range (<span id="temp-days-label">21</span>d)</div>
             <div id="temp-range" class="stat-value">--°C / --°C</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Solar Potential (<span id="solar-days-label">21</span>d)</div>
+            <div id="total-solar" class="stat-value">-- kWh</div>
         </div>
     </div>
 
@@ -241,10 +253,11 @@ async function updateDashboard() {
     // Update labels
     document.getElementById('total-days-label').innerText = totalDays;
     document.getElementById('temp-days-label').innerText = totalDays;
+    document.getElementById('solar-days-label').innerText = totalDays;
     
     // Use maximum past days (92) to calculate a better starting saturation
     const maxPastDays = 92;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min,shortwave_radiation_sum&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
     
     try {
         const response = await fetch(url);
@@ -320,6 +333,22 @@ async function updateDashboard() {
         const displayPrecip = daily.precipitation_sum.slice(preDisplayDays);
         const displayET0 = daily.et0_fao_evapotranspiration.slice(preDisplayDays);
 
+        // Solar energy potential calculation
+        // shortwave_radiation_sum is in MJ/m²; divide by 3.6 to get kWh/m² (= peak sun hours)
+        // Energy (kWh) = num_panels × (panel_watts / 1000 kW) × peak_sun_hours × performance_ratio
+        const numPanels = parseInt(document.getElementById('numPanels').value) || 2;
+        const panelWatts = parseFloat(document.getElementById('panelWatts').value) || 450;
+        // Performance ratio of 0.80 accounts for real-world losses (inverter efficiency, wiring,
+        // temperature derating, shading, and soiling) — a standard industry assumption.
+        const performanceRatio = 0.80;
+        const MJ_TO_KWH = 3.6; // 1 kWh = 3.6 MJ
+        const displayRadiation = (daily.shortwave_radiation_sum || []).slice(preDisplayDays);
+        const solarEnergyKwh = displayRadiation.map(rad => {
+            if (rad === null || rad === undefined) return null;
+            const peakSunHours = rad / MJ_TO_KWH;
+            return parseFloat((numPanels * (panelWatts / 1000) * peakSunHours * performanceRatio).toFixed(2));
+        });
+
         // Update UI Cards - use pastDays as the index for "current" saturation (today)
         const currentIndex = Math.min(pastDays, displaySaturation.length - 1);
         document.getElementById('current-sat').innerText = displaySaturation[currentIndex] + "%";
@@ -331,6 +360,10 @@ async function updateDashboard() {
         const overallMax = validMaxTemps.length > 0 ? Math.max(...validMaxTemps).toFixed(1) : "--";
         const overallMin = validMinTemps.length > 0 ? Math.min(...validMinTemps).toFixed(1) : "--";
         document.getElementById('temp-range').innerText = overallMin + "°C / " + overallMax + "°C";
+
+        // Calculate total solar energy for the display period
+        const totalSolar = solarEnergyKwh.reduce((sum, v) => sum + (v !== null ? v : 0), 0);
+        document.getElementById('total-solar').innerText = totalSolar.toFixed(1) + " kWh";
 
         // Prepare stacked bar data: rainfall minus evapotranspiration (net water) at bottom, evapotranspiration on top
         // Total bar height = total rainfall
@@ -416,8 +449,8 @@ async function updateDashboard() {
                         data: displaySaturation,
                         type: 'line',
                         borderColor: '#27ae60',
-                        backgroundColor: 'rgba(39, 174, 96, 0.3)',
-                        fill: true,
+                        backgroundColor: 'transparent',
+                        fill: false,
                         yAxisID: 'y2',
                         tension: 0.3,
                         spanGaps: true,
@@ -490,6 +523,18 @@ async function updateDashboard() {
                         pointRadius: 0,
                         spanGaps: true,
                         order: 3
+                    },
+                    {
+                        label: 'Solar Energy Potential (kWh)',
+                        data: solarEnergyKwh,
+                        type: 'line',
+                        borderColor: '#f39c12',
+                        backgroundColor: 'rgba(243, 156, 18, 0.15)',
+                        fill: true,
+                        yAxisID: 'y3',
+                        tension: 0.3,
+                        spanGaps: true,
+                        order: 1
                     }
                 ]
             },
@@ -520,6 +565,12 @@ async function updateDashboard() {
                         position: 'right',
                         min: 0,
                         max: 100,
+                        grid: { drawOnChartArea: false }
+                    },
+                    y3: {
+                        title: { display: true, text: 'Solar Energy (kWh)' },
+                        position: 'left',
+                        min: 0,
                         grid: { drawOnChartArea: false }
                     }
                 }
