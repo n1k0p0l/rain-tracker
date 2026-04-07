@@ -257,7 +257,7 @@ async function updateDashboard() {
     
     // Use maximum past days (92) to calculate a better starting saturation
     const maxPastDays = 92;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min,shortwave_radiation_sum&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max,temperature_2m_min&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
     
     try {
         const response = await fetch(url);
@@ -342,7 +342,19 @@ async function updateDashboard() {
         // temperature derating, shading, and soiling) — a standard industry assumption.
         const performanceRatio = 0.80;
         const MJ_TO_KWH = 3.6; // 1 kWh = 3.6 MJ
-        const displayRadiation = (daily.shortwave_radiation_sum || []).slice(preDisplayDays);
+        let displayRadiation = new Array(displayDates.length).fill(null);
+        try {
+            const solarUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=shortwave_radiation_sum&past_days=${maxPastDays}&forecast_days=${futureDays}&timezone=Europe%2FLisbon`;
+            const solarResponse = await fetch(solarUrl);
+            if (solarResponse.ok) {
+                const solarData = await solarResponse.json();
+                if (solarData.daily && solarData.daily.shortwave_radiation_sum) {
+                    displayRadiation = solarData.daily.shortwave_radiation_sum.slice(preDisplayDays);
+                }
+            }
+        } catch (solarError) {
+            console.warn('Could not fetch solar radiation data:', solarError.message);
+        }
         const solarEnergyKwh = displayRadiation.map(rad => {
             if (rad === null || rad === undefined) return null;
             const peakSunHours = rad / MJ_TO_KWH;
